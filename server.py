@@ -9,9 +9,18 @@ async def index(request):
     """Serve the client-side application."""
     return web.Response(text="py server test", content_type='text/html')
 
+class Client:
+    def __init__(self, name, sid):
+        self.name = name
+        self.sid = sid
+
+clients = []
+
 @sio.event
-def connect(sid, environ):
+async def connect(sid, environ):
     print("connect ", sid)
+    clients.append(sid)
+    await sio.emit('connected_clients', {'clients': clients})
 
 @sio.event
 async def message(sid, data):

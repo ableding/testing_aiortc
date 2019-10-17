@@ -3,20 +3,22 @@ import asyncio
 import logging
 import math
 import os
-
 import cv2
 import numpy
-from av import VideoFrame
+import socketio
+import time
 
+from av import VideoFrame
+from aiortc.contrib.media import MediaBlackhole, MediaPlayer, MediaRecorder
+from aiortc.contrib.signaling import add_signaling_arguments, create_signaling
 from aiortc import (
     RTCIceCandidate,
     RTCPeerConnection,
     RTCSessionDescription,
     VideoStreamTrack,
 )
-from aiortc.contrib.media import MediaBlackhole, MediaPlayer, MediaRecorder
-from aiortc.contrib.signaling import add_signaling_arguments, create_signaling
 
+sio = socketio.Client()
 
 class FlagVideoStreamTrack(VideoStreamTrack):
     """
@@ -125,7 +127,11 @@ async def run(pc, audio_player, video_player, audio_recorder, video_recorder, si
             print("Exiting")
             break
 
+
+
+
 if __name__ == "__main__":
+
     if os.path.isfile("/home/ilya/Downloads/aiortc-master/examples/videostream-cli/a.wav"):
         os.remove("/home/ilya/Downloads/aiortc-master/examples/videostream-cli/a.wav")
     parser = argparse.ArgumentParser(description="Video stream from the command line")
@@ -135,6 +141,22 @@ if __name__ == "__main__":
     parser.add_argument("--verbose", "-v", action="count")
     add_signaling_arguments(parser)
     args = parser.parse_args()
+
+
+    @sio.event
+    def connect():
+        print('connection established')
+
+
+    @sio.event
+    def connected_clients(data):
+        print("got new cli", data)
+
+
+    sio.connect('http://localhost:8080')
+    while True:
+        print(args.role)
+        time.sleep(1)
 
     if args.verbose:
         logging.basicConfig(level=logging.DEBUG)
