@@ -130,6 +130,7 @@ async def run(pc, audio_player, video_player, audio_recorder, video_recorder, si
 
 
 
+
 if __name__ == "__main__":
 
     if os.path.isfile("/home/ilya/Downloads/aiortc-master/examples/videostream-cli/a.wav"):
@@ -142,15 +143,12 @@ if __name__ == "__main__":
     add_signaling_arguments(parser)
     args = parser.parse_args()
 
+    #both_users_in_system
 
     @sio.event
     def connect():
         print('connection established')
-
-
-    @sio.event
-    def connected_clients(data):
-        print("got new cli", data)
+        sio.emit("getClientInfo", {'role': args.role, 'sid': sio.sid})
 
 
     sio.connect('http://localhost:8080')

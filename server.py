@@ -10,22 +10,34 @@ async def index(request):
     return web.Response(text="py server test", content_type='text/html')
 
 class Client:
-    def __init__(self, name, sid):
-        self.name = name
+    def __init__(self, role, sid):
+        self.role = role
         self.sid = sid
 
 clients = []
 
-@sio.event
-async def connect(sid, environ):
-    print("connect ", sid)
-    clients.append(sid)
-    await sio.emit('connected_clients', {'clients': clients})
+def offerAndAnswerConnected(clients):
+    return True if (clients[0].role == 'offer' and clients[1].role == 'answer') or (clients[0].role == 'answer' and clients[1].role == 'offer') else False
+
 
 @sio.event
-async def message(sid, data):
-    print("message ", data)
-    #await sio.emit('reply', room=sid)
+def getClientInfo(data, env):
+    print(env)
+    clients.append(Client(env['role'], env['sid']))
+
+    if len(clients) == 2:
+        if offerAndAnswerConnected(clients):
+            print("yes")
+        else:
+            print("no")
+
+
+@sio.event
+async def connect(sid, environ):
+    pass
+    #print("connect ", sid)
+    #clients.append(sid)
+    #await sio.emit('get_connected_clients', {'clients': clients})
 
 @sio.event
 def disconnect(sid):
