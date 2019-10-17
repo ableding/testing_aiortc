@@ -6,6 +6,7 @@ import os
 import cv2
 import numpy
 import socketio
+import threading
 import time
 
 from av import VideoFrame
@@ -18,7 +19,20 @@ from aiortc import (
     VideoStreamTrack,
 )
 
-sio = socketio.Client()
+serverLoop = None
+sio = socketio.AsyncClient()
+
+def runSecondThread():
+    global serverLoop
+    serverLoop = asyncio.new_event_loop()
+    serverLoop.run_until_complete(start_server())
+    return
+
+
+async def start_server():
+    await sio.connect('http://localhost:8080')
+    await sio.wait()
+
 
 class FlagVideoStreamTrack(VideoStreamTrack):
     """
@@ -131,6 +145,7 @@ async def run(pc, audio_player, video_player, audio_recorder, video_recorder, si
 both_users_in_system = False
 
 
+
 if __name__ == "__main__":
 
     if os.path.isfile("/home/ilya/Downloads/aiortc-master/examples/videostream-cli/a.wav"):
@@ -146,23 +161,25 @@ if __name__ == "__main__":
 
 
     @sio.event
-    def connect():
+    async def connect():
         print('connection established')
-        sio.emit("getClientInfo", {'role': args.role, 'sid': sio.sid})
+        await sio.emit("getClientInfo", {'role': args.role, 'sid': sio.sid})
 
     @sio.event
-    def continueRunningApp(env):
+    async def continueRunningApp(env):
         print("got")
         global both_users_in_system
         both_users_in_system = True
 
-    sio.connect('http://localhost:8080')
-    #sio.wait()
+    threads = []
+    t = threading.Thread(target=runSecondThread)
+    threads.append(t)
+    t.start()
 
     if args.verbose:
         logging.basicConfig(level=logging.DEBUG)
 
-    while both_users_in_system == False:
+    while both_users_in_system is False:
         pass
 
     # create signaling and peer connection
