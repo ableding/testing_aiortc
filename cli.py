@@ -128,7 +128,7 @@ async def run(pc, audio_player, video_player, audio_recorder, video_recorder, si
             break
 
 
-
+both_users_in_system = False
 
 
 if __name__ == "__main__":
@@ -143,21 +143,27 @@ if __name__ == "__main__":
     add_signaling_arguments(parser)
     args = parser.parse_args()
 
-    #both_users_in_system
+
 
     @sio.event
     def connect():
         print('connection established')
         sio.emit("getClientInfo", {'role': args.role, 'sid': sio.sid})
 
+    @sio.event
+    def continueRunningApp(env):
+        print("got")
+        global both_users_in_system
+        both_users_in_system = True
 
     sio.connect('http://localhost:8080')
-    while True:
-        print(args.role)
-        time.sleep(1)
+    #sio.wait()
 
     if args.verbose:
         logging.basicConfig(level=logging.DEBUG)
+
+    while both_users_in_system == False:
+        pass
 
     # create signaling and peer connection
     signaling = create_signaling(args)

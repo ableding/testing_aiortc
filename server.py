@@ -1,7 +1,7 @@
 from aiohttp import web
 import socketio
 
-sio = socketio.AsyncServer()
+sio = socketio.AsyncServer(async_mode='aiohttp')
 app = web.Application()
 sio.attach(app)
 
@@ -21,13 +21,13 @@ def offerAndAnswerConnected(clients):
 
 
 @sio.event
-def getClientInfo(data, env):
+async def getClientInfo(data, env):
     print(env)
     clients.append(Client(env['role'], env['sid']))
 
     if len(clients) == 2:
         if offerAndAnswerConnected(clients):
-            print("yes")
+            await sio.emit("continueRunningApp")
         else:
             print("no")
 
@@ -44,6 +44,4 @@ def disconnect(sid):
     print('disconnect ', sid)
 
 app.router.add_get('/', index)
-
-if __name__ == '__main__':
-    web.run_app(app)
+web.run_app(app)
