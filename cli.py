@@ -6,13 +6,13 @@ import os
 import cv2
 import numpy
 import socketio
-import threading
-import json
+import sys
 
 from av import VideoFrame
 from aiortc.contrib.media import MediaBlackhole, MediaPlayer, MediaRecorder
 from aiortc.contrib.signaling import add_signaling_arguments, create_signaling
 from aiortc.sdp import candidate_from_sdp, candidate_to_sdp
+import json
 from aiortc import (
     RTCIceCandidate,
     RTCPeerConnection,
@@ -20,25 +20,13 @@ from aiortc import (
     VideoStreamTrack,
 )
 
-serverLoop = None
-sio = socketio.AsyncClient()
-
-def runSecondThread():
-    global serverLoop
-    serverLoop = asyncio.new_event_loop()
-    serverLoop.run_until_complete(start_server())
-    return
-
-
-async def start_server():
-    await sio.connect('http://localhost:8080')
-    await sio.wait()
-
+sio = socketio.Client()
 
 class FlagVideoStreamTrack(VideoStreamTrack):
     """
     A video track that returns an animated flag.
     """
+
     def __init__(self):
         super().__init__()  # don't forget this!
         self.counter = 0
@@ -93,7 +81,6 @@ class FlagVideoStreamTrack(VideoStreamTrack):
         data_bgr[:, :] = color
         return data_bgr
 
-
 def object_to_string(obj):
     if isinstance(obj, RTCSessionDescription):
         message = {"sdp": obj.sdp, "type": obj.type}
@@ -108,17 +95,19 @@ def object_to_string(obj):
         message = {"type": "bye"}
     return json.dumps(message, sort_keys=True)
 
-async def run(pc, audio_player, video_player, audio_recorder, video_recorder, signaling, role):
+
+offerSDPReceived = False
+
+async def run(pc, audio_player, video_player, audio_recorder, video_recorder, signaling, role, sio):
     def add_tracks():
         if audio_player and audio_player.audio:
-            pc.addTrack(audio_player.audio)
+            pc.addTrack( audio_player.audio)
 
         if video_player and video_player.video:
             pc.addTrack(video_player.video)
 
     @pc.on("track")
     def on_track(track):
-        print("asd")
         if track.kind == "audio":
             audio_recorder.addTrack(track)
         if track.kind == "video":
@@ -132,13 +121,12 @@ async def run(pc, audio_player, video_player, audio_recorder, video_recorder, si
         add_tracks()
         await pc.setLocalDescription(await pc.createOffer())
         await signaling.send(pc.localDescription)
-        print(object_to_string(pc.localDescription))
+        sio.emit("sendOfferSDP", {'offerSDP': object_to_string(pc.localDescription) + "\n"})
 
     # consume signaling
     while True:
+
         obj = await signaling.receive()
-        if obj.type == "answer":
-            audio_player = MediaPlayer("default", format="pulse")
 
         if isinstance(obj, RTCSessionDescription):
             await pc.setRemoteDescription(obj)
@@ -150,31 +138,14 @@ async def run(pc, audio_player, video_player, audio_recorder, video_recorder, si
                 add_tracks()
                 await pc.setLocalDescription(await pc.createAnswer())
                 await signaling.send(pc.localDescription)
-                await sio.emit("f")
-                #await sio.emit("sendOfferSDP", {'offerSDP': object_to_string(pc.localDescription)})
-                #print(object_to_string(pc.localDescription))
+                sio.emit("sendAnswerSDP", {'answerSDP': object_to_string(pc.localDescription)})
         elif isinstance(obj, RTCIceCandidate):
             pc.addIceCandidate(obj)
         elif obj is None:
             print("Exiting")
             break
 
-both_users_in_system = False
-
-
-@sio.event
-async def connect():
-    print('connection established')
-    await sio.emit("getClientInfo", {'role': args.role, 'sid': sio.sid})
-
-
-@sio.event
-async def continueRunningApp(env):
-    global both_users_in_system
-    both_users_in_system = True
-
 if __name__ == "__main__":
-
     if os.path.isfile("/home/ilya/Downloads/aiortc-master/examples/videostream-cli/a.wav"):
         os.remove("/home/ilya/Downloads/aiortc-master/examples/videostream-cli/a.wav")
     parser = argparse.ArgumentParser(description="Video stream from the command line")
@@ -185,17 +156,37 @@ if __name__ == "__main__":
     add_signaling_arguments(parser)
     args = parser.parse_args()
 
-
-
-    threads = []
-    t = threading.Thread(target=runSecondThread)
-    threads.append(t)
-    t.start()
-
     if args.verbose:
         logging.basicConfig(level=logging.DEBUG)
 
-    while both_users_in_system is False:
+    both_users_in_system = False
+
+    @sio.event
+    def getAnswerSDP(sdp):
+        pass
+        #print(sdp['answerSDP'])
+        #for char in (sdp['answerSDP']):
+        #    keyboard.press(str(char))
+        #keyboard.press(Key.enter)
+        #keyboard.release(Key.enter)
+
+    @sio.event
+    def getOfferSDP(sdp):
+        obj = (sdp['offerSDP'])
+
+    @sio.event
+    def connect():
+        sio.emit("getClientInfo", {'role': args.role, 'sid': sio.sid})
+
+    @sio.event
+    def continueRunningApp(env):
+        global both_users_in_system
+        both_users_in_system = True
+
+    sio.connect('http://localhost:8080')
+    #sio.wait()
+
+    while not both_users_in_system:
         pass
 
     # create signaling and peer connection
@@ -228,10 +219,10 @@ if __name__ == "__main__":
                 video_recorder=video_recorder,
                 signaling=signaling,
                 role=args.role,
-                video_player=video_player
+                video_player=video_player,
+                sio=sio
             )
         )
-        
     except KeyboardInterrupt:
         pass
     finally:

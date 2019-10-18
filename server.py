@@ -1,5 +1,6 @@
 from aiohttp import web
 import socketio
+import sys
 
 sio = socketio.AsyncServer(async_mode='aiohttp')
 app = web.Application()
@@ -11,18 +12,23 @@ async def index(request):
 
 class Client:
     def __init__(self, role, sid):
-        self.role = role
-        self.sid = sid
+        self._role = role
+        self._sid = sid
 
+    def getRole(self):
+        return self._role
+
+    def getSID(self):
+        return self._sid
 clients = []
 
 def offerAndAnswerConnected(clients):
-    return True if (clients[0].role == 'offer' and clients[1].role == 'answer') or (clients[0].role == 'answer' and clients[1].role == 'offer') else False
+    return True if (clients[0].getRole() == 'offer' and clients[1].getRole() == 'answer') or (clients[0].getRole() == 'answer' and clients[1].getRole() == 'offer') else False
 
-@sio.event
-async def connect(sid, environ):
-    pass
-
+def getSIDByRole(clients, role):
+    for client in clients:
+        if client.getRole() == role:
+            return client.getSID()
 
 @sio.event
 async def getClientInfo(data, env):
@@ -36,12 +42,20 @@ async def getClientInfo(data, env):
             print("no")
 
 @sio.event
-def f():
-    print("yeeeeeeeeeeeeeeeeeeeeeeah")
+async def sendOfferSDP(sid, sdp):
+    await sio.emit("getOfferSDP", {'offerSDP': sdp['offerSDP']}, room=getSIDByRole(clients, "answer"))
 
 @sio.event
-async def sendOfferSDP(data, env):
-    print(env['offerSDP'])
+async def sendAnswerSDP(sid, sdp):
+    print("yeeeaaaah")
+    #await sio.emit("getAnswerSDP", {'answerSDP': sdp['answerSDP']}, room=getSIDByRole(clients, "offer"))
+
+@sio.event
+async def connect(sid, environ):
+    pass
+    #print("connect ", sid)
+    #clients.append(sid)
+    #await sio.emit('get_connected_clients', {'clients': clients})
 
 @sio.event
 def disconnect(sid):
